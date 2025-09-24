@@ -81,7 +81,7 @@ def query_elasticsearch_via_kibana(
         result_str = json.dumps(result)
         token_count = len(tokenizer.encode(result_str))
         if token_count > MAX_TOKEN_NUM:
-            raise Exception(f"Result exceeds {MAX_TOKEN_NUM} tokens, please refine your query.")
+            raise Exception(f"Result exceeds {MAX_TOKEN_NUM} tokens, got {token_count} tokens, please refine your query.")
 
         else:
             return result_str
