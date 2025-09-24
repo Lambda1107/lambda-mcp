@@ -10,7 +10,7 @@ from tokenizers import Tokenizer
 # Load tokenizer for accurate token counting
 tokenizer = Tokenizer.from_pretrained("gpt2")
 
-MAX_TOKEN_NUM = 20000
+MAX_TOKEN_NUM = 30000
 if os.environ.get("LAMBDA_MCP_MAX_TOKEN_NUM") is not None:
     MAX_TOKEN_NUM = int(os.environ["LAMBDA_MCP_MAX_TOKEN_NUM"])
 
