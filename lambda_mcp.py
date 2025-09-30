@@ -3,6 +3,7 @@
 import requests
 import json
 import os
+import tempfile
 from fastmcp import FastMCP
 from typing import Annotated
 from tokenizers import Tokenizer
@@ -11,7 +12,7 @@ import jq
 # Load tokenizer for accurate token counting
 tokenizer = Tokenizer.from_pretrained("gpt2")
 
-MAX_TOKEN_NUM = 300000
+MAX_TOKEN_NUM = 30000
 if os.environ.get("LAMBDA_MCP_MAX_TOKEN_NUM") is not None:
     MAX_TOKEN_NUM = int(os.environ["LAMBDA_MCP_MAX_TOKEN_NUM"])
 
@@ -57,7 +58,7 @@ def query_elasticsearch_via_kibana(
     Query Elasticsearch via Kibana proxy.
 
     Returns:
-        The query result as a JSON string
+        The query result as a JSON string, or a JSON object with file info if result is too large
 
     Example:
         query_elasticsearch_via_kibana(
@@ -94,7 +95,15 @@ def query_elasticsearch_via_kibana(
         result_str = json.dumps(result)
         token_count = len(tokenizer.encode(result_str))
         if token_count > MAX_TOKEN_NUM:
-            raise Exception(f"Result exceeds {MAX_TOKEN_NUM} tokens, got {token_count} tokens, please refine your query.")
+            # Write result to temporary file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+                temp_file.write(result_str)
+                temp_file_path = temp_file.name
+            return json.dumps({
+                "type": "file",
+                "path": temp_file_path,
+                "reason": f"Result exceeds {MAX_TOKEN_NUM} tokens (got {token_count} tokens). Result saved to file."
+            })
 
         else:
             return result_str
