@@ -6,6 +6,7 @@ import os
 from fastmcp import FastMCP
 from typing import Annotated
 from tokenizers import Tokenizer
+import jq
 
 # Load tokenizer for accurate token counting
 tokenizer = Tokenizer.from_pretrained("gpt2")
@@ -49,6 +50,7 @@ def query_elasticsearch_via_kibana(
     username: Annotated[str, "Username for Kibana authentication, if no auth, use empty string"],
     password: Annotated[str, "Password for Kibana authentication, if no auth, use empty string"],
     path: Annotated[str, "Elasticsearch query path (e.g., index/_search)"],
+    jq_query: Annotated[str, "jq query to filter the result, if no filter, use empty string. You must use filter when the result is long. Example: .[] | select(.index | contains(\"myindex\"))"] = "",
     query: Annotated[str, "JSON query body as string"] = "{}"
 ) -> str:
     """
@@ -63,6 +65,7 @@ def query_elasticsearch_via_kibana(
             username="user_name",
             password="passwd",
             path="_cat/indices",
+            jq_query=".[] | select(.index | contains(\"myindex\"))",
             query="{}"
         )
     """
@@ -78,6 +81,16 @@ def query_elasticsearch_via_kibana(
     try:
         login(session, base_url, username, password)
         result = query_es(session, base_url, path, query)
+        
+        # Apply jq filter if provided
+        if jq_query:
+            try:
+                compiled_jq = jq.compile(jq_query)
+                filtered_result = compiled_jq.input(result).all()
+                result = filtered_result
+            except Exception as e:
+                raise ValueError(f"Invalid jq query: {e}")
+        
         result_str = json.dumps(result)
         token_count = len(tokenizer.encode(result_str))
         if token_count > MAX_TOKEN_NUM:
