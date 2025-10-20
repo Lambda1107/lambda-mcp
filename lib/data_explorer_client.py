@@ -8,10 +8,14 @@ import requests
 import uuid
 
 
+
+
 class DataExplorer:
     """Client for querying databases through Data Service API."""
-    
-    def __init__(self, secret: str, module_name: str, base_url: str, api_path: str):
+    ENDPOINT_QUERY = "/query"
+    ENDPOINT_EXPLORE = "/explore_db"
+
+    def __init__(self, secret: str, module_name: str, base_url: str):
         """
         Initialize DataExplorer client.
         
@@ -19,26 +23,17 @@ class DataExplorer:
             secret: Secret key for HMAC authentication
             module_name: Module name for the API request
             base_url: Base URL of the Data Service API
-            api_path: API path for query endpoint
         """
         self.secret = secret
         self.module_name = module_name
         self.base_url = base_url
-        self.api_path = api_path
 
-    def query_db(self, dbname: str, sql: str) -> list:
+    def _generate_auth_headers(self) -> dict:
         """
-        Execute SQL query on specified database.
+        Generate authentication headers for API requests.
         
-        Args:
-            dbname: Database name to query
-            sql: SQL query string
-            
         Returns:
-            List of query results (dict records)
-            
-        Raises:
-            Exception: If query fails or returns error
+            Dictionary containing authentication headers
         """
         # Generate timestamp (milliseconds)
         timestamp = str(int(time.time() * 1000))
@@ -54,20 +49,44 @@ class DataExplorer:
         # Generate trace-id
         trace_id = str(uuid.uuid4())
         
-        # Format SQL (normalize whitespace and quotes)
-        sql = sql.replace('\n', ' ').replace('"', '%22').replace('\t', ' ').strip()
-        
-        # Build URL
-        url = f"{self.base_url}/{self.api_path}/{dbname}"
-        
-        # Set headers
-        headers = {
+        # Return headers
+        return {
             "content-type": "application/json",
             "module-name": self.module_name,
             "timestamp": timestamp,
             "api-token": token,
             "trace-id": trace_id
         }
+
+    def query_db(self, dbname: str, sql: str) -> list:
+        """
+        Execute SQL query on specified database.
+        
+        Args:
+            dbname: Database name to query
+            sql: SQL query string
+            
+        Returns:
+            List of query results (dict records). Each record is a dictionary where keys are column names
+            and values are the corresponding column values.
+            
+            Example return value:
+            [
+                {"id": 1, "name": "Alice", "age": 25},
+                {"id": 2, "name": "Bob", "age": 30}
+            ]
+            
+        Raises:
+            Exception: If query fails or returns error
+        """
+        # Format SQL (normalize whitespace and quotes)
+        sql = sql.replace('\n', ' ').replace('"', '%22').replace('\t', ' ').strip()
+        
+        # Build URL
+        url = f"{self.base_url.rstrip('/')}{self.ENDPOINT_QUERY}/{dbname}"
+        
+        # Get authentication headers
+        headers = self._generate_auth_headers()
         
         # Set request body
         payload = {
@@ -86,6 +105,49 @@ class DataExplorer:
             if resp_json.get("code") != 0:
                 raise Exception(
                     f"Query error: {resp_json.get('msg', 'Unknown error')}"
+                )
+            
+            return resp_json.get("data", [])
+            
+        except Exception as e:
+            raise Exception(f"Error occurred: {str(e)}")
+
+    def explore_db(self) -> list:
+        """
+        Get list of all available databases.
+        
+        Returns:
+            List of available database names as strings.
+            
+            Example return value:
+            [
+                "chatbot_api_db_sg",
+                "chatbot_admin_db_sg",
+                "inhouse_account_db",
+                "presto_adhoc"
+            ]
+            
+        Raises:
+            Exception: If request fails or returns error
+        """
+        # Build URL
+        url = f"{self.base_url.rstrip('/')}{self.ENDPOINT_EXPLORE}"
+        
+        # Get authentication headers
+        headers = self._generate_auth_headers()
+        
+        # Send GET request
+        try:
+            response = requests.get(url, headers=headers)
+            if response.status_code != 200:
+                raise Exception(
+                    f"HTTP error: {response.status_code}, msg: {response.text}"
+                )
+            
+            resp_json = response.json()
+            if resp_json.get("code") != 0:
+                raise Exception(
+                    f"Explore error: {resp_json.get('msg', 'Unknown error')}"
                 )
             
             return resp_json.get("data", [])
