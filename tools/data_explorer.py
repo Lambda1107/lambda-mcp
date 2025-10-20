@@ -221,4 +221,5 @@ def register_data_explorer_tool(mcp):
     mcp.tool(query_data_explorer)
     mcp.tool(list_dbnames)
     mcp.tool(list_tables)
-    mcp.resource("data_explorer_env_names://")(get_data_explorer_env_names)
+    # Register resource with proper URI scheme (data://, resource://, etc.)
+    mcp.resource("data://explorer/env-names")(get_data_explorer_env_names)
