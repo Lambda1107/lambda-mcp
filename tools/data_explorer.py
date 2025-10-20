@@ -155,13 +155,13 @@ def list_tables(
         dbname: Database name to list tables from
         
     Returns:
-        JSON string containing list of table information
+        JSON string containing list of table names
         
     Example return:
         [
-            {"Tables_in_database": "users"},
-            {"Tables_in_database": "orders"},
-            {"Tables_in_database": "products"}
+            "users",
+            "orders",
+            "products"
         ]
         
     Example:
@@ -191,12 +191,89 @@ def list_tables(
             
         # Execute SHOW TABLES query
         result = explorer.query_db(dbname, "SHOW TABLES")
+        
+        # Extract table names from result
+        # Result format: [{"Tables_in_xxx": "table1"}, {"Tables_in_xxx": "table2"}, ...]
+        # Extract just the table names
+        table_names = []
+        for row in result:
+            # Get the first (and only) value from each dict
+            if row:
+                table_name = next(iter(row.values()))
+                table_names.append(table_name)
             
         # Handle large response
-        return handle_large_response(result)
+        return handle_large_response(table_names)
             
     except Exception as e:
         raise RuntimeError(f"Failed to list tables: {str(e)}")
+
+def show_table_ddl(
+    env_name: Annotated[str, "Environment name (e.g., shopee_sg_test, shopee_sg_live, shopee_cn_live, tutid_live)"],
+    dbname: Annotated[str, "Database name"],
+    table_name: Annotated[str, "Table name to get DDL for"]
+) -> str:
+    """
+    Show the CREATE TABLE statement (DDL) for a specific table.
+    
+    This tool retrieves the table structure definition by executing a SHOW CREATE TABLE query.
+    Authentication credentials are automatically retrieved from environment variables.
+    
+    Args:
+        env_name: Environment name to query
+        dbname: Database name
+        table_name: Name of the table to get DDL for
+        
+    Returns:
+        JSON string containing the CREATE TABLE statement
+        
+    Example return:
+        {
+            "Table": "users",
+            "Create Table": "CREATE TABLE `users` (\n  `id` int NOT NULL AUTO_INCREMENT,\n  `name` varchar(255) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB"
+        }
+        
+    Example:
+        show_table_ddl(
+            env_name="shopee_sg_test",
+            dbname="chatbot_api_db_sg",
+            table_name="users"
+        )
+    """
+    try:
+        # Validate environment name
+        if env_name not in EXPLORER_CONFIG_LIST:
+            available_envs = ", ".join(EXPLORER_CONFIG_LIST.keys())
+            raise ValueError(f"Invalid env_name '{env_name}'. Available environments: {available_envs}")
+        
+        # Get authentication config from environment variables
+        module_name, secret = get_auth_config_from_env(env_name)
+        
+        # Get base URL from config
+        base_url = EXPLORER_CONFIG_LIST[env_name]
+        
+        # Create DataExplorer client
+        explorer = DataExplorer(
+            secret=secret,
+            module_name=module_name,
+            base_url=base_url,
+        )
+            
+        # Execute SHOW CREATE TABLE query
+        sql = f"SHOW CREATE TABLE {table_name}"
+        result = explorer.query_db(dbname, sql)
+        
+        # Result is typically a list with one dict containing 'Table' and 'Create Table' keys
+        if result and len(result) > 0:
+            ddl_info = result[0]
+        else:
+            ddl_info = {"error": f"No DDL found for table {table_name}"}
+            
+        # Handle large response
+        return handle_large_response(ddl_info)
+            
+    except Exception as e:
+        raise RuntimeError(f"Failed to get table DDL: {str(e)}")
 
 def get_data_explorer_env_names() -> str:
     """
@@ -221,5 +298,6 @@ def register_data_explorer_tool(mcp):
     mcp.tool(query_data_explorer)
     mcp.tool(list_dbnames)
     mcp.tool(list_tables)
+    mcp.tool(show_table_ddl)
     # Register resource with proper URI scheme (data://, resource://, etc.)
     mcp.resource("data://explorer/env-names")(get_data_explorer_env_names)
