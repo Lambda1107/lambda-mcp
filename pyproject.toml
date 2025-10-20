@@ -46,6 +46,7 @@ Repository = "https://github.com/Lambda1107/lambda-mcp"
 Issues = "https://github.com/Lambda1107/lambda-mcp/issues"
 
 [tool.setuptools]
+packages = ["lib", "tools"]
 py-modules = ["lambda_mcp"]
 
 [tool.black]
